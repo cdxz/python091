@@ -53,49 +53,49 @@ err_zdiv()
 }
 
 /* Integers are quite normal objects, to make object handling uniform.
-   (Using odd pointers to represent integers would save much space
-   but require extra checks for this special case throughout the code.)
-   Since, a typical Python program spends much of its time allocating
-   and deallocating integers, these operations should be very fast.
-   Therefore we use a dedicated allocation scheme with a much lower
-   overhead (in space and time) than straight malloc(): a simple
-   dedicated free list, filled when necessary with memory from malloc().
-*/
+ * (Using odd pointers to represent integers would save much space
+ * but require extra checks for this special case throughout the code.)
+ * Since, a typical Python program spends much of its time allocating
+ * and deallocating integers, these operations should be very fast.
+ * Therefore we use a dedicated allocation scheme with a much lower
+ * overhead (in space and time) than straight malloc(): a simple
+ * dedicated free list, filled when necessary with memory from malloc().
+ */
 
 #define BLOCK_SIZE     1000    /* 1K less typical malloc overhead */
 #define N_INTOBJECTS   (BLOCK_SIZE / sizeof(intobject))
 
-static intobject *
-fill_free_list()
+static intobject *fill_free_list()
 {
-       intobject *p, *q;
-       p = NEW(intobject, N_INTOBJECTS);
-       if (p == NULL)
-               return (intobject *)err_nomem();
-       q = p + N_INTOBJECTS;
-       while (--q > p)
-               *(intobject **)q = q-1;
-       *(intobject **)q = NULL;
-       return p + N_INTOBJECTS - 1;
+    intobject *p, *q;
+    /* 一家伙分配N_INTOBJECTS个整型对象的空间, 这样可以避免频繁的调用malloc */
+    p = NEW(intobject, N_INTOBJECTS);
+    if (p == NULL)
+        return (intobject *)err_nomem();
+    q = p + N_INTOBJECTS;
+    while (--q > p)
+        /* 这么写的目的是啥? */
+        *(intobject **)q = q-1;
+    *(intobject **)q = NULL;
+    return p + N_INTOBJECTS - 1;
 }
 
 static intobject *free_list = NULL;
 
-object *
-newintobject(ival)
-       long ival;
+/* 返回一个新的int型对象 */
+object *newintobject(long ival)
 {
-       register intobject *v;
-       if (free_list == NULL) {
-               if ((free_list = fill_free_list()) == NULL)
-                       return NULL;
-       }
-       v = free_list;
-       free_list = *(intobject **)free_list;
-       NEWREF(v);
-       v->ob_type = &Inttype;
-       v->ob_ival = ival;
-       return (object *) v;
+    register intobject *v;
+    if (free_list == NULL) {
+        if ((free_list = fill_free_list()) == NULL)
+            return NULL;
+    }
+    v = free_list;
+    free_list = *(intobject **)free_list;
+    NEWREF(v);
+    v->ob_type = &Inttype;
+    v->ob_ival = ival;
+    return (object *) v;
 }
 
 static void
@@ -106,16 +106,14 @@ int_dealloc(v)
        free_list = v;
 }
 
-long
-getintvalue(op)
-       register object *op;
+/* 返回Int类型的值 */
+long getintvalue(register object *op)
 {
-       if (!is_intobject(op)) {
-               err_badcall();
-               return -1;
-       }
-       else
-               return ((intobject *)op) -> ob_ival;
+    if (!is_intobject(op)) {
+        err_badcall();
+        return -1;
+    } else
+        return ((intobject *)op) -> ob_ival;
 }
 
 /* Methods */

@@ -26,38 +26,40 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include "allobjects.h"
 
-object *
-newsizedstringobject(str, size)
-       char *str;
-       int size;
+/* 此函数和newstringobject差别就在这里没有调用strlen */
+object *newsizedstringobject(char *str, int size)
 {
-       register stringobject *op = (stringobject *)
-               malloc(sizeof(stringobject) + size * sizeof(char));
-       if (op == NULL)
-               return err_nomem();
-       NEWREF(op);
-       op->ob_type = &Stringtype;
-       op->ob_size = size;
-       if (str != NULL)
-               memcpy(op->ob_sval, str, size);
-       op->ob_sval[size] = '\0';
-       return (object *) op;
+    register stringobject *op;
+    op = (stringobject *)malloc(sizeof(stringobject) + size * sizeof(char));
+    if (op == NULL)
+        return err_nomem();
+    NEWREF(op);
+    op->ob_type = &Stringtype;
+    op->ob_size = size;
+    if (str != NULL)
+        memcpy(op->ob_sval, str, size);
+    op->ob_sval[size] = '\0';
+    return (object *) op;
 }
 
-object *
-newstringobject(str)
-       char *str;
+object * newstringobject(char *str)
 {
-       register unsigned int size = strlen(str);
-       register stringobject *op = (stringobject *)
-               malloc(sizeof(stringobject) + size * sizeof(char));
-       if (op == NULL)
-               return err_nomem();
-       NEWREF(op);
-       op->ob_type = &Stringtype;
-       op->ob_size = size;
-       strcpy(op->ob_sval, str);
-       return (object *) op;
+    register unsigned int size = strlen(str);
+    register stringobject *op;
+    /* 分配空间, 存储字符串对象, 结合stringobject的声明, 这里有一字节的浪费 */
+    op = (stringobject *) malloc(sizeof(stringobject) + size * sizeof(char));
+    if (op == NULL)
+        /* TODO: 设定了一个MemoryError异常, 但是并没有让程序退出? */
+        return err_nomem();
+    /* NEWREF把object的引用技术设为1 */
+    NEWREF(op);
+    /* 对象类型设为string */
+    op->ob_type = &Stringtype;
+    /* ob_size对象表示字符串的长度 */
+    op->ob_size = size;
+    /* 这里是字符串的真正内容 */
+    strcpy(op->ob_sval, str);
+    return (object *) op;
 }
 
 unsigned int

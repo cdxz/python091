@@ -43,11 +43,17 @@ functions should be applied to nil objects.
 
 /* NB The type is revealed here only because it is used in dictobject.c */
 
+/**
+ * stringobject在varobject的基础上新加了ob_sval变量, 这个变量用于存储字符串.
+ */
 typedef struct {
        OB_VARHEAD
        char ob_sval[1];
 } stringobject;
 
+/**
+ * Stringtype在stringobject.c文件有定义
+ */
 extern typeobject Stringtype;
 
 #define is_stringobject(op) ((op)->ob_type == &Stringtype)

@@ -30,20 +30,21 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 long ref_total;
 #endif
 
-/* Object allocation routines used by NEWOBJ and NEWVAROBJ macros.
-   These are used by the individual routines for object creation.
-   Do not call them otherwise, they do not initialize the object! */
-
-object *
-newobject(tp)
-       typeobject *tp;
+/* Object allocation routines(常规的, 例行动作) used by NEWOBJ and NEWVAROBJ
+ * macros. These are used by the individual(个别的, 独特的) routines for
+ * object creation. Do not call them otherwise, they do not initialize the
+ * object!
+ *
+ * 如上, 这个创建方法并不做初始化, 只是简单的分配内存空间并设定对象类型
+ */
+object * newobject(typeobject *tp)
 {
-       object *op = (object *) malloc(tp->tp_basicsize);
-       if (op == NULL)
-               return err_nomem();
-       NEWREF(op);
-       op->ob_type = tp;
-       return op;
+    object *op = (object *) malloc(tp->tp_basicsize);
+    if (op == NULL)
+        return err_nomem();
+    NEWREF(op);
+    op->ob_type = tp;
+    return op;
 }
 
 #if 0 /* unused */
@@ -232,59 +233,3 @@ object NoObject = {
        OB_HEAD_INIT(&Notype)
 };
 
-
-#ifdef TRACE_REFS
-
-static object refchain = {&refchain, &refchain};
-
-NEWREF(op)
-       object *op;
-{
-       ref_total++;
-       op->ob_refcnt = 1;
-       op->_ob_next = refchain._ob_next;
-       op->_ob_prev = &refchain;
-       refchain._ob_next->_ob_prev = op;
-       refchain._ob_next = op;
-}
-
-UNREF(op)
-       register object *op;
-{
-       register object *p;
-       if (op->ob_refcnt < 0) {
-               fprintf(stderr, "UNREF negative refcnt\n");
-               abort();
-       }
-       for (p = refchain._ob_next; p != &refchain; p = p->_ob_next) {
-               if (p == op)
-                       break;
-       }
-       if (p == &refchain) { /* Not found */
-               fprintf(stderr, "UNREF unknown object\n");
-               abort();
-       }
-       op->_ob_next->_ob_prev = op->_ob_prev;
-       op->_ob_prev->_ob_next = op->_ob_next;
-}
-
-DELREF(op)
-       object *op;
-{
-       UNREF(op);
-       (*(op)->ob_type->tp_dealloc)(op);
-}
-
-printrefs(fp)
-       FILE *fp;
-{
-       object *op;
-       fprintf(fp, "Remaining objects:\n");
-       for (op = refchain._ob_next; op != &refchain; op = op->_ob_next) {
-               fprintf(fp, "[%d] ", op->ob_refcnt);
-               printobject(op, fp, 0);
-               putc('\n', fp);
-       }
-}
-
-#endif

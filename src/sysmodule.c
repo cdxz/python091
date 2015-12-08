@@ -44,11 +44,6 @@ Data members:
 #include "modsupport.h"
 
 /* Define delimiter used in $PYTHONPATH */
-
-#ifdef THINK_C
-#define DELIM ' '
-#endif
-
 #ifndef DELIM
 #define DELIM ':'
 #endif
@@ -76,139 +71,128 @@ sysgetfile(name, def)
        return fp;
 }
 
-int
-sysset(name, v)
-       char *name;
-       object *v;
+/* 向sys模块字典写入/删除信息 */
+int sysset(char *name, object *v)
 {
-       if (v == NULL)
-               return dictremove(sysdict, name);
-       else
-               return dictinsert(sysdict, name, v);
+    if (v == NULL)
+        return dictremove(sysdict, name);
+    else
+        return dictinsert(sysdict, name, v);
 }
 
-static object *
-sys_exit(self, args)
-       object *self;
-       object *args;
+/* 在具体点, self实际上应该是一个整型对象才是 */
+static object *sys_exit(object *self, object *args)
 {
-       int sts;
-       if (!getintarg(args, &sts))
-               return NULL;
-       goaway(sts);
-       exit(sts); /* Just in case */
-       /* NOTREACHED */
+    int sts;
+    if (!getintarg(args, &sts))
+        return NULL;
+    goaway(sts);
+    exit(sts); /* Just in case */
+    /* NOTREACHED */
 }
 
 static struct methodlist sys_methods[] = {
-       {"exit",      sys_exit},
-       {NULL,          NULL}           /* sentinel */
+    {"exit",      sys_exit},
+    {NULL,          NULL}           /* sentinel */
 };
 
 static object *sysin, *sysout, *syserr;
 
-void
-initsys()
+/* sys模块就是在这里实现的 */
+void initsys()
 {
-       object *m = initmodule("sys", sys_methods);
-       sysdict = getmoduledict(m);
-       INCREF(sysdict);
-       /* NB keep an extra ref to the std files to avoid closing them
-          when the user deletes them */
-       /* XXX File objects should have a "don't close" flag instead */
-       sysin = newopenfileobject(stdin, "<stdin>", "r");
-       sysout = newopenfileobject(stdout, "<stdout>", "w");
-       syserr = newopenfileobject(stderr, "<stderr>", "w");
-       if (err_occurred())
-               fatal("can't create sys.std* file objects");
-       dictinsert(sysdict, "stdin", sysin);
-       dictinsert(sysdict, "stdout", sysout);
-       dictinsert(sysdict, "stderr", syserr);
-       dictinsert(sysdict, "modules", get_modules());
-       if (err_occurred())
-               fatal("can't insert sys.* objects in sys dict");
+    object *m = initmodule("sys", sys_methods);
+    sysdict = getmoduledict(m);
+    INCREF(sysdict);
+    /* NB keep an extra ref to the std files to avoid closing them
+     * when the user deletes them
+     * XXX File objects should have a "don't close" flag instead
+     */
+    sysin = newopenfileobject(stdin, "<stdin>", "r");
+    sysout = newopenfileobject(stdout, "<stdout>", "w");
+    syserr = newopenfileobject(stderr, "<stderr>", "w");
+    if (err_occurred())
+        fatal("can't create sys.std* file objects");
+    dictinsert(sysdict, "stdin", sysin);
+    dictinsert(sysdict, "stdout", sysout);
+    dictinsert(sysdict, "stderr", syserr);
+    dictinsert(sysdict, "modules", get_modules());
+    if (err_occurred())
+        fatal("can't insert sys.* objects in sys dict");
 }
 
-static object *
-makepathobject(path, delim)
-       char *path;
-       int delim;
+static object *makepathobject(char *path, int delim)
 {
-       int i, n;
-       char *p;
-       object *v, *w;
+    int i, n;
+    char *p;
+    object *v, *w;
 
-       n = 1;
-       p = path;
-       while ((p = strchr(p, delim)) != NULL) {
-               n++;
-               p++;
-       }
-       v = newlistobject(n);
-       if (v == NULL)
-               return NULL;
-       for (i = 0; ; i++) {
-               p = strchr(path, delim);
-               if (p == NULL)
-                       p = strchr(path, '\0'); /* End of string */
-               w = newsizedstringobject(path, (int) (p - path));
-               if (w == NULL) {
-                       DECREF(v);
-                       return NULL;
-               }
-               setlistitem(v, i, w);
-               if (*p == '\0')
-                       break;
-               path = p+1;
-       }
-       return v;
+    n = 1;
+    p = path;
+    /* 统计得到有多少路径在path里面. */
+    while ((p = strchr(p, delim)) != NULL) {
+        n++;
+        p++;
+    }
+    /* 终于看到list对象了, path保存在list里面 */
+    v = newlistobject(n);
+    if (v == NULL)
+        return NULL;
+    for (i = 0; ; i++) {
+        p = strchr(path, delim);
+        if (p == NULL)
+            p = strchr(path, '\0'); /* End of string */
+        w = newsizedstringobject(path, (int) (p - path));
+        if (w == NULL) {
+            DECREF(v);
+            return NULL;
+        }
+        setlistitem(v, i, w);
+        if (*p == '\0')
+            break;
+        path = p+1;
+    }
+    return v;
 }
 
-void
-setpythonpath(path)
-       char *path;
+void setpythonpath(char *path)
 {
-       object *v;
-       if ((v = makepathobject(path, DELIM)) == NULL)
-               fatal("can't create sys.path");
-       if (sysset("path", v) != 0)
-               fatal("can't assign sys.path");
-       DECREF(v);
+    object *v;
+    if ((v = makepathobject(path, DELIM)) == NULL)
+        fatal("can't create sys.path");
+    if (sysset("path", v) != 0)
+        fatal("can't assign sys.path");
+    DECREF(v);
 }
 
-static object *
-makeargvobject(argc, argv)
-       int argc;
-       char **argv;
+static object *makeargvobject(int argc, char **argv)
 {
-       object *av;
-       if (argc < 0 || argv == NULL)
-               argc = 0;
-       av = newlistobject(argc);
-       if (av != NULL) {
-               int i;
-               for (i = 0; i < argc; i++) {
-                       object *v = newstringobject(argv[i]);
-                       if (v == NULL) {
-                               DECREF(av);
-                               av = NULL;
-                               break;
-                       }
-                       setlistitem(av, i, v);
-               }
-       }
-       return av;
+    object *av;
+    if (argc < 0 || argv == NULL)
+        argc = 0;
+    /* 又是一个列表类型, 记得么PATH也被放倒列表里面啦 */
+    av = newlistobject(argc);
+    if (av != NULL) {
+        int i;
+        for (i = 0; i < argc; i++) {
+            object *v = newstringobject(argv[i]);
+            if (v == NULL) {
+                DECREF(av);
+                av = NULL;
+                break;
+            }
+            setlistitem(av, i, v);
+        }
+    }
+    return av;
 }
 
-void
-setpythonargv(argc, argv)
-       int argc;
-       char **argv;
+void setpythonargv(int argc, char **argv)
 {
-       object *av = makeargvobject(argc, argv);
-       if (av == NULL)
-               fatal("no mem for sys.argv");
-       if (sysset("argv", av) != 0)
-               fatal("can't assign sys.argv");
-       DECREF(av);
+    object *av = makeargvobject(argc, argv);
+    if (av == NULL)
+        fatal("no mem for sys.argv");
+    if (sysset("argv", av) != 0)
+        fatal("can't assign sys.argv");
+    DECREF(av);
 }

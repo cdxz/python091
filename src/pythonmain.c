@@ -40,6 +40,9 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "import.h"
 
 extern char *getpythonpath();
+extern void initargs(int *p_argc, char ***p_argv);
+extern void initimport();
+extern void initbuiltin();
 
 extern grammar gram; /* From graminit.c */
 
@@ -47,9 +50,34 @@ extern grammar gram; /* From graminit.c */
 int debugging; /* Needed by parser.c */
 #endif
 
-main(argc, argv)
-       int argc;
-       char **argv;
+/* Initialize all */
+void initall()
+{
+    /* 标志初始化工作已经完成, 避免重复初始化 */
+    static int inited;
+
+    if (inited)
+        return;
+    inited = 1;
+
+    /* 初始化了一个叫modules的字典对象, 应该是用于存放模块信息的 */
+    initimport();
+
+    /* Modules 'builtin' and 'sys' are initialized here,
+     * they are needed by random bits of the interpreter.
+     * All other modules are optional and should be initialized
+     * by the initcalls() of a specific configuration.
+     */
+
+    initbuiltin(); /* Also initializes builtin exceptions */
+    initsys();
+
+    initcalls(); /* Configuration-dependent initializations */
+
+    initintr(); /* For intrcheck(), 中断型号的处理 */
+}
+
+int main(int argc, char **argv)
 {
        char *filename = NULL;
        FILE *fp = stdin;
@@ -59,12 +87,9 @@ main(argc, argv)
        if (argc > 1 && strcmp(argv[1], "-") != 0)
                filename = argv[1];
 
-       if (filename != NULL) {
-               if ((fp = fopen(filename, "r")) == NULL) {
-                       fprintf(stderr, "python: can't open file '%s'\n",
-                               filename);
-                       exit(2);
-               }
+       if (filename != NULL && ((fp = fopen(filename, "r")) == NULL)) {
+           fprintf(stderr, "python: can't open file '%s'\n", filename);
+           exit(2);
        }
 
        initall();
@@ -74,32 +99,6 @@ main(argc, argv)
 
        goaway(run(fp, filename == NULL ? "<stdin>" : filename));
        /*NOTREACHED*/
-}
-
-/* Initialize all */
-
-void
-initall()
-{
-       static int inited;
-
-       if (inited)
-               return;
-       inited = 1;
-
-       initimport();
-
-       /* Modules 'builtin' and 'sys' are initialized here,
-          they are needed by random bits of the interpreter.
-          All other modules are optional and should be initialized
-          by the initcalls() of a specific configuration. */
-
-       initbuiltin(); /* Also initializes builtin exceptions */
-       initsys();
-
-       initcalls(); /* Configuration-dependent initializations */
-
-       initintr(); /* For intrcheck() */
 }
 
 /* Parse input from a file and execute it */
@@ -340,63 +339,35 @@ parse_string(str, start, n_ret)
 }
 
 /* Print fatal error message and abort */
-
-void
-fatal(msg)
-       char *msg;
+void fatal(char *msg)
 {
-       fprintf(stderr, "Fatal error: %s\n", msg);
-       abort();
+    fprintf(stderr, "Fatal error: %s\n", msg);
+    abort();
 }
 
 /* Clean up and exit */
-
-void
-goaway(sts)
-       int sts;
+void goaway(int sts)
 {
-       flushline();
+    flushline();
 
-       /* XXX Call doneimport() before donecalls(), since donecalls()
-          calls wdone(), and doneimport() may close windows */
-       doneimport();
-       donecalls();
+    /* XXX Call doneimport() before donecalls(), since donecalls()
+       calls wdone(), and doneimport() may close windows */
+    doneimport();
+    donecalls();
 
-       err_clear();
+    err_clear();
 
 #ifdef REF_DEBUG
-       fprintf(stderr, "[%ld refs]\n", ref_total);
+    fprintf(stderr, "[%ld refs]\n", ref_total);
 #endif
 
-#ifdef THINK_C_3_0
-       if (sts == 0)
-               Click_On(0);
-#endif
-
-#ifdef TRACE_REFS
-       if (askyesno("Print left references?")) {
-#ifdef THINK_C_3_0
-               Click_On(1);
-#endif
-               printrefs(stderr);
-       }
-#endif /* TRACE_REFS */
-
-       exit(sts);
-       /*NOTREACHED*/
+    exit(sts);
+    /*NOTREACHED*/
 }
 
 static
 finaloutput()
 {
-#ifdef TRACE_REFS
-       if (!askyesno("Print left references?"))
-               return;
-#ifdef THINK_C_3_0
-       Click_On(1);
-#endif
-       printrefs(stderr);
-#endif /* TRACE_REFS */
 }
 
 /* Ask a yes/no question */
@@ -412,20 +383,6 @@ askyesno(prompt)
                return 0;
        return buf[0] == 'y' || buf[0] == 'Y';
 }
-
-#ifdef THINK_C_3_0
-
-/* Check for file descriptor connected to interactive device.
-   Pretend that stdin is always interactive, other files never. */
-
-int
-isatty(fd)
-       int fd;
-{
-       return fd == fileno(stdin);
-}
-
-#endif
 
 /*     XXX WISH LIST
 

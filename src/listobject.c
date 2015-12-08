@@ -27,36 +27,35 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include "allobjects.h"
 
-object *
-newlistobject(size)
-       int size;
+object *newlistobject(int size)
 {
-       int i;
-       listobject *op;
-       if (size < 0) {
-               err_badcall();
-               return NULL;
-       }
-       op = (listobject *) malloc(sizeof(listobject));
-       if (op == NULL) {
-               return err_nomem();
-       }
-       if (size <= 0) {
-               op->ob_item = NULL;
-       }
-       else {
-               op->ob_item = (object **) malloc(size * sizeof(object *));
-               if (op->ob_item == NULL) {
-                       free((ANY *)op);
-                       return err_nomem();
-               }
-       }
-       NEWREF(op);
-       op->ob_type = &Listtype;
-       op->ob_size = size;
-       for (i = 0; i < size; i++)
-               op->ob_item[i] = NULL;
-       return (object *) op;
+    int i;
+    listobject *op;
+    if (size < 0) {
+        err_badcall();
+        return NULL;
+    }
+    op = (listobject *) malloc(sizeof(listobject));
+    if (op == NULL) {
+        return err_nomem();
+    }
+    if (size <= 0) {
+        /* 这里不可能到达 */
+        op->ob_item = NULL;
+    } else {
+        /* 列表是一个二级指针, 这里为她分配空间 */
+        op->ob_item = (object **) malloc(size * sizeof(object *));
+        if (op->ob_item == NULL) {
+            free((void *)op);
+            return err_nomem();
+        }
+    }
+    NEWREF(op);
+    op->ob_type = &Listtype;
+    op->ob_size = size;
+    for (i = 0; i < size; i++)
+        op->ob_item[i] = NULL;
+    return (object *) op;
 }
 
 int
@@ -87,30 +86,26 @@ getlistitem(op, i)
        return ((listobject *)op) -> ob_item[i];
 }
 
-int
-setlistitem(op, i, newitem)
-       register object *op;
-       register int i;
-       register object *newitem;
+int setlistitem(register object *op, register int i, register object *newitem)
 {
-       register object *olditem;
-       if (!is_listobject(op)) {
-               if (newitem != NULL)
-                       DECREF(newitem);
-               err_badcall();
-               return -1;
-       }
-       if (i < 0 || i >= ((listobject *)op) -> ob_size) {
-               if (newitem != NULL)
-                       DECREF(newitem);
-               err_setstr(IndexError, "list assignment index out of range");
-               return -1;
-       }
-       olditem = ((listobject *)op) -> ob_item[i];
-       ((listobject *)op) -> ob_item[i] = newitem;
-       if (olditem != NULL)
-               DECREF(olditem);
-       return 0;
+    register object *olditem;
+    if (!is_listobject(op)) {
+        if (newitem != NULL)
+            DECREF(newitem);
+        err_badcall();
+        return -1;
+    }
+    if (i < 0 || i >= ((listobject *)op) -> ob_size) {
+        if (newitem != NULL)
+            DECREF(newitem);
+        err_setstr(IndexError, "list assignment index out of range");
+        return -1;
+    }
+    olditem = ((listobject *)op) -> ob_item[i];
+    ((listobject *)op) -> ob_item[i] = newitem;
+    if (olditem != NULL)
+        DECREF(olditem);
+    return 0;
 }
 
 static int

@@ -42,30 +42,25 @@ extern double fmod PROTO((double, double));
 extern double pow PROTO((double, double));
 #endif
 
-object *
-newfloatobject(fval)
-       double fval;
+object *newfloatobject(double fval)
 {
-       /* For efficiency, this code is copied from newobject() */
-       register floatobject *op = (floatobject *) malloc(sizeof(floatobject));
-       if (op == NULL)
-               return err_nomem();
-       NEWREF(op);
-       op->ob_type = &Floattype;
-       op->ob_fval = fval;
-       return (object *) op;
+    /* For efficiency, this code is copied from newobject() */
+    register floatobject *op = (floatobject *) malloc(sizeof(floatobject));
+    if (op == NULL)
+        return err_nomem();
+    NEWREF(op);
+    op->ob_type = &Floattype;
+    op->ob_fval = fval;
+    return (object *) op;
 }
 
-double
-getfloatvalue(op)
-       object *op;
+double getfloatvalue(object *op)
 {
-       if (!is_floatobject(op)) {
-               err_badarg();
-               return -1;
-       }
-       else
-               return ((floatobject *)op) -> ob_fval;
+    if (!is_floatobject(op)) {
+        err_badarg();
+        return -1;
+    } else
+        return ((floatobject *)op) -> ob_fval;
 }
 
 /* Methods */

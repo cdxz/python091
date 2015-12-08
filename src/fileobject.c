@@ -56,24 +56,20 @@ getfilefile(f)
        return ((fileobject *)f)->f_fp;
 }
 
-object *
-newopenfileobject(fp, name, mode)
-       FILE *fp;
-       char *name;
-       char *mode;
+object *newopenfileobject(FILE *fp, char *name, char *mode)
 {
-       fileobject *f = NEWOBJ(fileobject, &Filetype);
-       if (f == NULL)
-               return NULL;
-       f->f_fp = NULL;
-       f->f_name = newstringobject(name);
-       f->f_mode = newstringobject(mode);
-       if (f->f_name == NULL || f->f_mode == NULL) {
-               DECREF(f);
-               return NULL;
-       }
-       f->f_fp = fp;
-       return (object *) f;
+    fileobject *f = NEWOBJ(fileobject, &Filetype);
+    if (f == NULL)
+        return NULL;
+    f->f_fp = NULL;
+    f->f_name = newstringobject(name);
+    f->f_mode = newstringobject(mode);
+    if (f->f_name == NULL || f->f_mode == NULL) {
+        DECREF(f);
+        return NULL;
+    }
+    f->f_fp = fp;
+    return (object *) f;
 }
 
 object *

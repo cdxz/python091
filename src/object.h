@@ -72,33 +72,26 @@ whose size is determined when the object is allocated.
 123456789-123456789-123456789-123456789-123456789-123456789-123456789-12
 */
 
-#ifndef NDEBUG
-
-/* Turn on heavy reference debugging */
-#define TRACE_REFS
-
-/* Turn on reference counting */
-#define REF_DEBUG
-
-#endif /* NDEBUG */
-
-#ifdef TRACE_REFS
-#define OB_HEAD \
-       struct _object *_ob_next, *_ob_prev; \
-       int ob_refcnt; \
-       struct _typeobject *ob_type;
-#define OB_HEAD_INIT(type) 0, 0, 1, type,
-#else
 #define OB_HEAD \
        unsigned int ob_refcnt; \
        struct _typeobject *ob_type;
 #define OB_HEAD_INIT(type) 1, type,
-#endif
 
 #define OB_VARHEAD \
        OB_HEAD \
        unsigned int ob_size; /* Number of items in variable part */
 
+/**
+ * object成员有:
+ *
+ *  - 后一个object(debug) _ob_next
+ *  - 前一个object(debug) _ob_prev
+ *  - 对象的引用计数
+ *  - _typeobject结构体, 这就是调用type(var)的时候用到的结构体
+ *
+ * 进一步的, varobject会包含ob_size成员, 用于指示变量的长度.
+ * 对list和dict而言, 就是元素的个数, 对string来说, 是字符串的长度.
+ */
 typedef struct _object {
        OB_HEAD
 } object;
@@ -152,24 +145,22 @@ typedef struct {
 } mapping_methods;
 
 typedef struct _typeobject {
-       OB_VARHEAD
-       char *tp_name; /* For printing */
-       unsigned int tp_basicsize, tp_itemsize; /* For allocation */
+    OB_VARHEAD
+    char *tp_name; /* For printing, 类型名字 */
+    unsigned int tp_basicsize, tp_itemsize; /* For allocation */
 
-       /* Methods to implement standard operations */
+    /* Methods to implement standard operations */
+    void (*tp_dealloc) FPROTO((object *));
+    void (*tp_print) FPROTO((object *, FILE *, int));
+    object *(*tp_getattr) FPROTO((object *, char *));
+    int (*tp_setattr) FPROTO((object *, char *, object *));
+    int (*tp_compare) FPROTO((object *, object *));
+    object *(*tp_repr) FPROTO((object *));
 
-       void (*tp_dealloc) FPROTO((object *));
-       void (*tp_print) FPROTO((object *, FILE *, int));
-       object *(*tp_getattr) FPROTO((object *, char *));
-       int (*tp_setattr) FPROTO((object *, char *, object *));
-       int (*tp_compare) FPROTO((object *, object *));
-       object *(*tp_repr) FPROTO((object *));
-
-       /* Method suites for standard classes */
-
-       number_methods *tp_as_number;
-       sequence_methods *tp_as_sequence;
-       mapping_methods *tp_as_mapping;
+    /* Method suites for standard classes */
+    number_methods *tp_as_number;
+    sequence_methods *tp_as_sequence;
+    mapping_methods *tp_as_mapping;
 } typeobject;
 
 extern typeobject Typetype; /* The type of type objects */
@@ -215,37 +206,17 @@ variable first, both of which are slower; and in a multi-threaded
 environment the global variable trick is not safe.)
 */
 
-#ifdef TRACE_REFS
-#ifndef REF_DEBUG
-#define REF_DEBUG
-#endif
-#endif
-
-#ifndef TRACE_REFS
 #define DELREF(op) (*(op)->ob_type->tp_dealloc)((object *)(op))
 #define UNREF(op) /*empty*/
-#endif
 
-#ifdef REF_DEBUG
-extern long ref_total;
-#ifndef TRACE_REFS
-#define NEWREF(op) (ref_total++, (op)->ob_refcnt = 1)
-#endif
-#define INCREF(op) (ref_total++, (op)->ob_refcnt++)
-#define DECREF(op) \
-       if (--ref_total, --(op)->ob_refcnt > 0) \
-               ; \
-       else \
-               DELREF(op)
-#else
 #define NEWREF(op) ((op)->ob_refcnt = 1)
 #define INCREF(op) ((op)->ob_refcnt++)
+/* 引用计数大于0, 就正常减, 等于0了, 就需要释放这个对象 */
 #define DECREF(op) \
-       if (--(op)->ob_refcnt > 0) \
-               ; \
-       else \
-               DELREF(op)
-#endif
+    if (--(op)->ob_refcnt > 0) \
+        ; \
+    else \
+        DELREF(op)
 
 /* Macros to use in case the object pointer may be NULL: */
 

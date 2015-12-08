@@ -33,10 +33,7 @@ static int use_stdwin;
 #endif
 
 /*ARGSUSED*/
-void
-initargs(p_argc, p_argv)
-       int *p_argc;
-       char ***p_argv;
+void initargs(int *p_argc, char ***p_argv)
 {
 #ifdef USE_STDWIN
        extern char *getenv();
@@ -73,8 +70,7 @@ initargs(p_argc, p_argv)
 #endif
 }
 
-void
-initcalls()
+void initcalls()
 {
 }
 
@@ -108,13 +104,12 @@ maybeinitstdwin()
 
 extern char *getenv();
 
-char *
-getpythonpath()
+char * getpythonpath()
 {
-       char *path = getenv("PYTHONPATH");
-       if (path == 0)
-               path = PYTHONPATH;
-       return path;
+    char *path = getenv("PYTHONPATH");
+    if (path == 0)
+        path = PYTHONPATH;
+    return path;
 }
 
 

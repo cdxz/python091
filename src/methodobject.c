@@ -35,21 +35,18 @@ typedef struct {
        object *m_self;
 } methodobject;
 
-object *
-newmethodobject(name, meth, self)
-       char *name; /* static string */
-       method meth;
-       object *self;
+/* name is static string */
+object *newmethodobject(char *name, method meth, object *self)
 {
-       methodobject *op = NEWOBJ(methodobject, &Methodtype);
-       if (op != NULL) {
-               op->m_name = name;
-               op->m_meth = meth;
-               if (self != NULL)
-                       INCREF(self);
-               op->m_self = self;
-       }
-       return (object *)op;
+    methodobject *op = NEWOBJ(methodobject, &Methodtype);
+    if (op != NULL) {
+        op->m_name = name;
+        op->m_meth = meth;
+        if (self != NULL)
+            INCREF(self);
+        op->m_self = self;
+    }
+    return (object *)op;
 }
 
 method

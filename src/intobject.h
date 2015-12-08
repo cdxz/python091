@@ -39,6 +39,7 @@ The type intobject is (unfortunately) exposed bere so we can declare
 TrueObject and FalseObject below; don't use this.
 */
 
+/* Int类型, 默认是长整型 */
 typedef struct {
        OB_HEAD
        long ob_ival;

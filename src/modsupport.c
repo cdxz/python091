@@ -29,31 +29,28 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "import.h"
 
 
-object *
-initmodule(name, methods)
-       char *name;
-       struct methodlist *methods;
+object *initmodule(char *name, struct methodlist *methods)
 {
-       object *m, *d, *v;
-       struct methodlist *ml;
-       char namebuf[256];
-       if ((m = add_module(name)) == NULL) {
-               fprintf(stderr, "initializing module: %s\n", name);
-               fatal("can't create a module");
-       }
-       d = getmoduledict(m);
-       for (ml = methods; ml->ml_name != NULL; ml++) {
-               sprintf(namebuf, "%s.%s", name, ml->ml_name);
-               v = newmethodobject(strdup(namebuf), ml->ml_meth,
-                                               (object *)NULL);
-               /* XXX The strdup'ed memory is never freed */
-               if (v == NULL || dictinsert(d, ml->ml_name, v) != 0) {
-                       fprintf(stderr, "initializing module: %s\n", name);
-                       fatal("can't initialize module");
-               }
-               DECREF(v);
-       }
-       return m;
+    object *m, *d, *v;
+    struct methodlist *ml;
+    char namebuf[256];
+    if ((m = add_module(name)) == NULL) {
+        fprintf(stderr, "initializing module: %s\n", name);
+        fatal("can't create a module");
+    }
+    /* 下面开始注册m模块的方法 */
+    d = getmoduledict(m);
+    for (ml = methods; ml->ml_name != NULL; ml++) {
+        sprintf(namebuf, "%s.%s", name, ml->ml_name);
+        v = newmethodobject(strdup(namebuf), ml->ml_meth, (object *)NULL);
+        /* XXX The strdup'ed memory is never freed */
+        if (v == NULL || dictinsert(d, ml->ml_name, v) != 0) {
+            fprintf(stderr, "initializing module: %s\n", name);
+            fatal("can't initialize module");
+        }
+        DECREF(v);
+    }
+    return m;
 }
 
 
@@ -70,16 +67,13 @@ getnoarg(v)
        return 1;
 }
 
-int
-getintarg(v, a)
-       object *v;
-       int *a;
+int getintarg(object *v, int *a)
 {
-       if (v == NULL || !is_intobject(v)) {
-               return err_badarg();
-       }
-       *a = getintvalue(v);
-       return 1;
+    if (v == NULL || !is_intobject(v)) {
+        return err_badarg();
+    }
+    *a = getintvalue(v);
+    return 1;
 }
 
 int

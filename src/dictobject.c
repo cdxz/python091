@@ -25,57 +25,58 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 /* Dictionary object implementation; using a hash table */
 
 /*
-XXX Note -- although this may look professional, I didn't think very hard
-about the problem and it is possible that obvious improvements exist.
-A similar module that I saw by Chris Torek:
-- uses chaining instead of hashed linear probing
-- remembers the hash value with the entry to speed up table resizing
-- sets the table size to a power of 2
-- uses a different hash function:
-       h = 0; p = str; while (*p) h = (h<<5) - h + *p++;
-*/
+ * XXX Note -- although this may look professional, I didn't think very hard
+ * about the problem and it is possible that obvious improvements exist.
+ * A similar module that I saw by Chris Torek:
+ *
+ *  - uses chaining instead of hashed linear probing
+ *  - remembers the hash value with the entry to speed up table resizing
+ *  - sets the table size to a power of 2
+ *  - uses a different hash function:
+ *      h = 0; p = str; while (*p) h = (h<<5) - h + *p++;
+ */
 
 #include "allobjects.h"
 
 
 /*
-Table of primes suitable as keys, in ascending order.
-The first line are the largest primes less than some powers of two,
-the second line is the largest prime less than 6000,
-and the third line is a selection from Knuth, Vol. 3, Sec. 6.1, Table 1.
-The final value is a sentinel and should cause the memory allocation
-of that many entries to fail (if none of the earlier values cause such
-failure already).
-*/
+ * Table of primes suitable as keys, in ascending order.
+ * The first line are the largest primes less than some powers of two,
+ * the second line is the largest prime less than 6000,
+ * and the third line is a selection from Knuth, Vol. 3, Sec. 6.1, Table 1.
+ * The final value is a sentinel and should cause the memory allocation
+ * of that many entries to fail (if none of the earlier values cause such
+ * failure already).
+ */
 static unsigned int primes[] = {
-       3, 7, 13, 31, 61, 127, 251, 509, 1021, 2017, 4093,
-       5987,
-       9551, 15683, 19609, 31397,
-       0xffffffff /* All bits set -- truncation OK */
+    3, 7, 13, 31, 61, 127, 251, 509, 1021, 2017, 4093,
+    5987,
+    9551, 15683, 19609, 31397,
+    0xffffffff /* All bits set -- truncation OK */
 };
 
-/* String used as dummy key to fill deleted entries */
+/* String used as dummy(仿制品, 傀儡) key to fill deleted entries */
 static stringobject *dummy; /* Initialized by first call to newdictobject() */
 
 /*
-Invariant for entries: when in use, de_value is not NULL and de_key is
-not NULL and not dummy; when not in use, de_value is NULL and de_key
-is either NULL or dummy.  A dummy key value cannot be replaced by NULL,
-since otherwise other keys may be lost.
-*/
+ * Invariant(不变的) for entries: when in use, de_value is not NULL and de_key is
+ * not NULL and not dummy; when not in use, de_value is NULL and de_key
+ * is either NULL or dummy.  A dummy key value cannot be replaced by NULL,
+ * since otherwise other keys may be lost.
+ */
 typedef struct {
-       stringobject *de_key;
-       object *de_value;
+    stringobject *de_key;
+    object *de_value;
 } dictentry;
 
 /*
-To ensure the lookup algorithm terminates, the table size must be a
-prime number and there must be at least one NULL key in the table.
-The value di_fill is the number of non-NULL keys; di_used is the number
-of non-NULL, non-dummy keys.
-To avoid slowing down lookups on a near-full table, we resize the table
-when it is more than half filled.
-*/
+ * To ensure the lookup algorithm terminates, the table size must be a
+ * prime number and there must be at least one NULL key in the table.
+ * The value di_fill is the number of non-NULL keys; di_used is the number
+ * of non-NULL, non-dummy keys.
+ * To avoid slowing down lookups on a near-full table, we resize the table
+ * when it is more than half filled.
+ */
 typedef struct {
        OB_HEAD
        int di_fill;
@@ -84,163 +85,163 @@ typedef struct {
        dictentry *di_table;
 } dictobject;
 
-object *
-newdictobject()
+object *newdictobject()
 {
-       register dictobject *dp;
-       if (dummy == NULL) { /* Auto-initialize dummy */
-               dummy = (stringobject *) newstringobject("");
-               if (dummy == NULL)
-                       return NULL;
-       }
-       dp = NEWOBJ(dictobject, &Dicttype);
-       if (dp == NULL)
-               return NULL;
-       dp->di_size = primes[0];
-       dp->di_table = (dictentry *) calloc(sizeof(dictentry), dp->di_size);
-       if (dp->di_table == NULL) {
-               DEL(dp);
-               return err_nomem();
-       }
-       dp->di_fill = 0;
-       dp->di_used = 0;
-       return (object *)dp;
+    register dictobject *dp;
+
+    /* Auto-initialize dummy */
+    if (dummy == NULL) {
+        /* dummy设置为空字符串对象 */
+        dummy = (stringobject *) newstringobject("");
+        if (dummy == NULL)
+            /* 初始化失败 */
+            return NULL;
+    }
+
+    /* 下面一句用于创建一个新的字典对象, 但是没有做初始化 */
+    dp = NEWOBJ(dictobject, &Dicttype);
+    if (dp == NULL)
+        return NULL;
+    dp->di_size = primes[0];
+    dp->di_table = (dictentry *) calloc(sizeof(dictentry), dp->di_size);
+    if (dp->di_table == NULL) {
+        /* NEWOBJ宏替换为newobject函数调用malloc分配了dp内存, DEL将其释放 */
+        DEL(dp);
+        return err_nomem();
+    }
+    dp->di_fill = 0;
+    dp->di_used = 0;
+    return (object *)dp;
 }
 
 /*
-The basic lookup function used by all operations.
-This is essentially Algorithm D from Knuth Vol. 3, Sec. 6.4.
-Open addressing is preferred over chaining since the link overhead for
-chaining would be substantial (100% with typical malloc overhead).
-
-First a 32-bit hash value, 'sum', is computed from the key string.
-The first character is added an extra time shifted by 8 to avoid hashing
-single-character keys (often heavily used variables) too close together.
-All arithmetic on sum should ignore overflow.
-
-The initial probe index is then computed as sum mod the table size.
-Subsequent probe indices are incr apart (mod table size), where incr
-is also derived from sum, with the additional requirement that it is
-relative prime to the table size (i.e., 1 <= incr < size, since the size
-is a prime number).  My choice for incr is somewhat arbitrary.
-*/
+ * The basic lookup function used by all operations.
+ * This is essentially(本质上, 本来) Algorithm D from Knuth Vol. 3, Sec. 6.4.
+ * Open addressing is preferred(首选的) over chaining since the link overhead for
+ * chaining would be substantial(大量, 结实, 牢固, 重大的) (100% with typical malloc overhead).
+ *
+ * First a 32-bit hash value, 'sum', is computed from the key string.
+ * The first character is added an extra time shifted by 8 to avoid hashing
+ * single-character keys (often heavily used variables) too close together.
+ * All arithmetic on sum should ignore overflow.
+ *
+   The initial probe index is then computed as sum mod the table size.
+ * Subsequent probe indices are incr apart (mod table size), where incr
+ * is also derived from sum, with the additional requirement that it is
+ * relative prime to the table size (i.e., 1 <= incr < size, since the size
+ * is a prime number).  My choice for incr is somewhat arbitrary.
+ *
+ * 这个函数在dictory的dictentry哈希表里面找key元素, 并返回之.
+ */
 static dictentry *lookdict PROTO((dictobject *, char *));
-static dictentry *
-lookdict(dp, key)
-       register dictobject *dp;
-       char *key;
+static dictentry *lookdict(register dictobject *dp, char *key)
 {
-       register int i, incr;
-       register dictentry *freeslot = NULL;
-       register unsigned char *p = (unsigned char *) key;
-       register unsigned long sum = *p << 7;
-       while (*p != '\0')
-               sum = sum + sum + *p++;
-       i = sum % dp->di_size;
-       do {
-               sum = sum + sum + 1;
-               incr = sum % dp->di_size;
-       } while (incr == 0);
-       for (;;) {
-               register dictentry *ep = &dp->di_table[i];
-               if (ep->de_key == NULL) {
-                       if (freeslot != NULL)
-                               return freeslot;
-                       else
-                               return ep;
-               }
-               if (ep->de_key == dummy) {
-                       if (freeslot != NULL)
-                               freeslot = ep;
-               }
-               else if (GETSTRINGVALUE(ep->de_key)[0] == key[0]) {
-                       if (strcmp(GETSTRINGVALUE(ep->de_key), key) == 0) {
-                               return ep;
-                       }
-               }
-               i = (i + incr) % dp->di_size;
-       }
+    register int i, incr;
+    register dictentry *freeslot = NULL;
+    register unsigned char *p = (unsigned char *) key;
+    /* 下面是字典key的哈希算法, 不用十分在意 */
+    register unsigned long sum = *p << 7;
+    while (*p != '\0')
+        sum = sum + sum + *p++;
+    i = sum % dp->di_size;
+    do {
+        sum = sum + sum + 1;
+        incr = sum % dp->di_size;
+    } while (incr == 0);
+    for (;;) {
+        register dictentry *ep = &dp->di_table[i];
+        /* de_key为NULL表明这个dictentry没有用到 */
+        if (ep->de_key == NULL) {
+            if (freeslot != NULL)
+            	/* 返回一个被回收了的元素资源使用 */
+                return freeslot;
+            else
+                /* 这里的返回意味着table里面一个闲置的元素 */
+                return ep;
+        }
+        if (ep->de_key == dummy) {
+            if (freeslot != NULL)
+                freeslot = ep;
+        } else if (GETSTRINGVALUE(ep->de_key)[0] == key[0]) {
+            if (strcmp(GETSTRINGVALUE(ep->de_key), key) == 0) {
+                /* 找到了 */
+                return ep;
+            }
+        }
+        i = (i + incr) % dp->di_size;
+    }
 }
 
 /*
-Internal routine to insert a new item into the table.
-Used both by the internal resize routine and by the public insert routine.
-Eats a reference to key and one to value.
-*/
+ * Internal routine to insert a new item into the table.
+ * Used both by the internal resize routine and by the public insert routine.
+ * Eats a reference to key and one to value.
+ */
 static void insertdict PROTO((dictobject *, stringobject *, object *));
-static void
-insertdict(dp, key, value)
-       register dictobject *dp;
-       stringobject *key;
-       object *value;
+static void insertdict(register dictobject *dp, stringobject *key, object *value)
 {
-       register dictentry *ep;
-       ep = lookdict(dp, GETSTRINGVALUE(key));
-       if (ep->de_value != NULL) {
-               DECREF(ep->de_value);
-               DECREF(key);
-       }
-       else {
-               if (ep->de_key == NULL)
-                       dp->di_fill++;
-               else
-                       DECREF(ep->de_key);
-               ep->de_key = key;
-               dp->di_used++;
-       }
-       ep->de_value = value;
+    register dictentry *ep;
+    ep = lookdict(dp, GETSTRINGVALUE(key));
+    if (ep->de_value != NULL) {
+        DECREF(ep->de_value);
+        DECREF(key);
+    } else {
+        if (ep->de_key == NULL)
+            dp->di_fill++;
+        else
+            DECREF(ep->de_key);
+        ep->de_key = key;
+        dp->di_used++;
+    }
+    ep->de_value = value;
 }
 
 /*
-Restructure the table by allocating a new table and reinserting all
-items again.  When entries have been deleted, the new table may
-actually be smaller than the old one.
-*/
+ * Restructure the table by allocating a new table and reinserting all
+ * items again.  When entries have been deleted, the new table may
+ * actually be smaller than the old one.
+ */
 static int dictresize PROTO((dictobject *));
-static int
-dictresize(dp)
-       dictobject *dp;
+static int dictresize(dictobject *dp)
 {
-       register int oldsize = dp->di_size;
-       register int newsize;
-       register dictentry *oldtable = dp->di_table;
-       register dictentry *newtable;
-       register dictentry *ep;
-       register int i;
-       newsize = dp->di_size;
-       for (i = 0; ; i++) {
-               if (primes[i] > dp->di_used*2) {
-                       newsize = primes[i];
-                       break;
-               }
-       }
-       newtable = (dictentry *) calloc(sizeof(dictentry), newsize);
-       if (newtable == NULL) {
-               err_nomem();
-               return -1;
-       }
-       dp->di_size = newsize;
-       dp->di_table = newtable;
-       dp->di_fill = 0;
-       dp->di_used = 0;
-       for (i = 0, ep = oldtable; i < oldsize; i++, ep++) {
-               if (ep->de_value != NULL)
-                       insertdict(dp, ep->de_key, ep->de_value);
-               else if (ep->de_key != NULL)
-                       DECREF(ep->de_key);
-       }
-       DEL(oldtable);
-       return 0;
+    register int oldsize = dp->di_size;
+    register int newsize;
+    register dictentry *oldtable = dp->di_table;
+    register dictentry *newtable;
+    register dictentry *ep;
+    register int i;
+    newsize = dp->di_size;
+    for (i = 0; ; i++) {
+        if (primes[i] > dp->di_used*2) {
+            newsize = primes[i];
+            break;
+        }
+    }
+    newtable = (dictentry *) calloc(sizeof(dictentry), newsize);
+    if (newtable == NULL) {
+        err_nomem();
+        return -1;
+    }
+    dp->di_size = newsize;
+    dp->di_table = newtable;
+    dp->di_fill = 0;
+    dp->di_used = 0;
+    for (i = 0, ep = oldtable; i < oldsize; i++, ep++) {
+        if (ep->de_value != NULL)
+            insertdict(dp, ep->de_key, ep->de_value);
+        else if (ep->de_key != NULL)
+            DECREF(ep->de_key);
+    }
+    DEL(oldtable);
+    return 0;
 }
 
-object *
-dictlookup(op, key)
-       object *op;
-       char *key;
+/* 在op里面找到key, 并返回 */
+object *dictlookup(object *op, char *key)
 {
-       if (!is_dictobject(op))
-               fatal("dictlookup on non-dictionary");
-       return lookdict((dictobject *)op, key) -> de_value;
+    if (!is_dictobject(op))
+        fatal("dictlookup on non-dictionary");
+    return lookdict((dictobject *)op, key) -> de_value;
 }
 
 #ifdef NOT_USED
@@ -266,79 +267,71 @@ dict2lookup(op, key)
 }
 #endif
 
-static int
-dict2insert(op, key, value)
-       register object *op;
-       object *key;
-       object *value;
+static int dict2insert(register object *op, object *key, object *value)
 {
-       register dictobject *dp;
-       register stringobject *keyobj;
-       if (!is_dictobject(op)) {
-               err_badcall();
-               return -1;
-       }
-       dp = (dictobject *)op;
-       if (!is_stringobject(key)) {
-               err_badarg();
-               return -1;
-       }
-       keyobj = (stringobject *)key;
-       /* if fill >= 2/3 size, resize */
-       if (dp->di_fill*3 >= dp->di_size*2) {
-               if (dictresize(dp) != 0) {
-                       if (dp->di_fill+1 > dp->di_size)
-                               return -1;
-               }
-       }
-       INCREF(keyobj);
-       INCREF(value);
-       insertdict(dp, keyobj, value);
-       return 0;
+    register dictobject *dp;
+    register stringobject *keyobj;
+    if (!is_dictobject(op)) {
+        err_badcall();
+        return -1;
+    }
+    dp = (dictobject *)op;
+    if (!is_stringobject(key)) {
+        err_badarg();
+        return -1;
+    }
+    keyobj = (stringobject *)key;
+    /* if fill >= 2/3 size, resize */
+    if (dp->di_fill*3 >= dp->di_size*2) {
+        if (dictresize(dp) != 0) {
+            if (dp->di_fill+1 > dp->di_size)
+                return -1;
+        }
+    }
+    /* 开始插入之前就做引用计数, 要不到insertdict里面就被删掉了 */
+    INCREF(keyobj);
+    INCREF(value);
+    insertdict(dp, keyobj, value);
+    return 0;
 }
 
-int
-dictinsert(op, key, value)
-       object *op;
-       char *key;
-       object *value;
+int dictinsert(object *op, char *key, object *value)
 {
-       register object *keyobj;
-       register int err;
-       keyobj = newstringobject(key);
-       if (keyobj == NULL) {
-               err_nomem();
-               return -1;
-       }
-       err = dict2insert(op, keyobj, value);
-       DECREF(keyobj);
-       return err;
+    register object *keyobj;
+    register int err;
+    /* 新申请一个字符串对象来存放key */
+    keyobj = newstringobject(key);
+    if (keyobj == NULL) {
+        err_nomem();
+        return -1;
+    }
+    err = dict2insert(op, keyobj, value);
+    /* 释放存放key的字符串对象(dict2insert里面用的是此对象的一个副本) */
+    DECREF(keyobj);
+    return err;
 }
 
-int
-dictremove(op, key)
-       object *op;
-       char *key;
+int dictremove(object *op, char *key)
 {
-       register dictobject *dp;
-       register dictentry *ep;
-       if (!is_dictobject(op)) {
-               err_badcall();
-               return -1;
-       }
-       dp = (dictobject *)op;
-       ep = lookdict(dp, key);
-       if (ep->de_value == NULL) {
-               err_setstr(KeyError, "key not in dictionary");
-               return -1;
-       }
-       DECREF(ep->de_key);
-       INCREF(dummy);
-       ep->de_key = dummy;
-       DECREF(ep->de_value);
-       ep->de_value = NULL;
-       dp->di_used--;
-       return 0;
+    register dictobject *dp;
+    register dictentry *ep;
+    if (!is_dictobject(op)) {
+        err_badcall();
+        return -1;
+    }
+    dp = (dictobject *)op;
+    ep = lookdict(dp, key);
+    if (ep->de_value == NULL) {
+        err_setstr(KeyError, "key not in dictionary");
+        return -1;
+    }
+    DECREF(ep->de_key);
+    INCREF(dummy);
+    ep->de_key = dummy;
+    DECREF(ep->de_value);
+    ep->de_value = NULL;
+    dp->di_used--;
+    return 0;
 }
 
 static int

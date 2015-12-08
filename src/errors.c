@@ -67,45 +67,43 @@ extern int errno;
 extern char *strerror PROTO((int));
 
 /* Last exception stored by err_setval() */
-
+/* 这两个文件作用域全局变量的作用目前并不清楚, 稍后再看 */
 static object *last_exception;
 static object *last_exc_val;
 
-void
-err_setval(exception, value)
-       object *exception;
-       object *value;
+void err_setval(object *exception, object *value)
 {
-       XDECREF(last_exception);
-       XINCREF(exception);
-       last_exception = exception;
+    /* XDECREF 用于给一个对象引用计数做减法. 但是它可以接受空指针(忽略操作)*/
+    XDECREF(last_exception);
+    /* XINCREF 作用类似于XDECREF */
+    XINCREF(exception);
+    /* 现在上一个异常指向当前异常 */
+    last_exception = exception;
 
-       XDECREF(last_exc_val);
-       XINCREF(value);
-       last_exc_val = value;
+    /* 下面是同样的步骤, 只是在对另外一个全局变量做操作 */
+    XDECREF(last_exc_val);
+    XINCREF(value);
+    last_exc_val = value;
 }
 
-void
-err_set(exception)
-       object *exception;
+/**
+ * 调用err_setval设置全局的(本文件作用域)错误
+ */
+void err_set(object *exception)
 {
-       err_setval(exception, (object *)NULL);
+    err_setval(exception, (object *)NULL);
 }
 
-void
-err_setstr(exception, string)
-       object *exception;
-       char *string;
+void err_setstr(object *exception, char *string)
 {
-       object *value = newstringobject(string);
-       err_setval(exception, value);
-       XDECREF(value);
+    object *value = newstringobject(string);
+    err_setval(exception, value);
+    XDECREF(value);
 }
 
-int
-err_occurred()
+int err_occurred()
 {
-       return last_exception != NULL;
+    return last_exception != NULL;
 }
 
 void
@@ -129,22 +127,22 @@ err_clear()
 }
 
 /* Convenience functions to set a type error exception and return 0 */
-
-int
-err_badarg()
+int err_badarg()
 {
-       err_setstr(TypeError, "illegal argument type for built-in operation");
-       return 0;
+    err_setstr(TypeError, "illegal argument type for built-in operation");
+    return 0;
 }
 
-object *
-err_nomem()
+/**
+ * 抛出一个MemoryError对象?
+ */
+object *err_nomem()
 {
-       err_set(MemoryError);
-       return NULL;
+    err_set(MemoryError);
+    return NULL;
 }
 
-object *
+    object *
 err_errno(exc)
        object *exc;
 {
@@ -158,10 +156,9 @@ err_errno(exc)
        return NULL;
 }
 
-void
-err_badcall()
+void err_badcall()
 {
-       err_setstr(SystemError, "bad argument to internal function");
+    err_setstr(SystemError, "bad argument to internal function");
 }
 
 /* Set the error appropriate to the given input error code (see errcode.h) */

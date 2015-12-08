@@ -30,6 +30,8 @@ It should be possible to use other object types as base classes,
 but currently it isn't.  We'll see if we can fix that later, sigh...
 */
 
+#define ANY void
+
 extern typeobject Classtype, Classmembertype, Classmethodtype;
 
 #define is_classobject(op) ((op)->ob_type == &Classtype)

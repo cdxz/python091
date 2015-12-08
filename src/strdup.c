@@ -26,14 +26,13 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "malloc.h"
 #include "string.h"
 
-char *
-strdup(str)
-       const char *str;
+/* 这个函数标准库里面有, 为啥不用? */
+char *strdup(const char *str)
 {
-       if (str != NULL) {
-               register char *copy = NEW(char, strlen(str) + 1);
-               if (copy != NULL)
-                       return strcpy(copy, str);
-       }
-       return NULL;
+    if (str != NULL) {
+        register char *copy = NEW(char, strlen(str) + 1);
+        if (copy != NULL)
+            return strcpy(copy, str);
+    }
+    return NULL;
 }

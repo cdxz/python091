@@ -39,48 +39,41 @@ static int init_builtin(char *name);
 #include "pythonrun.h"
 
 /* Define pathname separator used in file names */
-
-#ifdef THINK_C
-#define SEP ':'
-#endif
-
 #ifndef SEP
 #define SEP '/'
 #endif
 
 static object *modules;
 
-/* Initialization */
-
-void
-initimport()
+/* Initialization, 这里说明模块是放在一个dict里面来管理的 */
+void initimport()
 {
-       if ((modules = newdictobject()) == NULL)
-               fatal("no mem for dictionary of modules");
+    if ((modules = newdictobject()) == NULL)
+        fatal("no mem for dictionary of modules");
 }
 
-object *
-get_modules()
+/* 当前注册的模块字典 */
+object *get_modules()
 {
-       return modules;
+    return modules;
 }
 
-object *
-add_module(name)
-       char *name;
+object *add_module(char *name)
 {
-       object *m;
-       if ((m = dictlookup(modules, name)) != NULL && is_moduleobject(m))
-               return m;
-       m = newmoduleobject(name);
-       if (m == NULL)
-               return NULL;
-       if (dictinsert(modules, name, m) != 0) {
-               DECREF(m);
-               return NULL;
-       }
-       DECREF(m); /* Yes, it still exists, in modules! */
-       return m;
+    object *m;
+    /* 已经存在这样一个模块了, 直接返回 */
+    if ((m = dictlookup(modules, name)) != NULL && is_moduleobject(m))
+        return m;
+    m = newmoduleobject(name);
+    if (m == NULL)
+        return NULL;
+    /* 将当前这个模块添加到全局modules字典里面 */
+    if (dictinsert(modules, name, m) != 0) {
+        DECREF(m);
+        return NULL;
+    }
+    DECREF(m); /* Yes, it still exists, in modules! */
+    return m;
 }
 
 static FILE *

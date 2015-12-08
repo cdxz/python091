@@ -37,29 +37,25 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "ceval.h"
 #include "modsupport.h"
 
-static object *
-builtin_abs(self, v)
-       object *self;
-       object *v;
+/* 此函数实现了buildin模块内建的abs方法 */
+static object *builtin_abs(object *self, object *v)
 {
-       /* XXX This should be a method in the as_number struct in the type */
-       if (v == NULL) {
-               /* */
-       }
-       else if (is_intobject(v)) {
-               long x = getintvalue(v);
-               if (x < 0)
-                       x = -x;
-               return newintobject(x);
-       }
-       else if (is_floatobject(v)) {
-               double x = getfloatvalue(v);
-               if (x < 0)
-                       x = -x;
-               return newfloatobject(x);
-       }
-       err_setstr(TypeError, "abs() argument must be float or int");
-       return NULL;
+    /* XXX This should be a method in the as_number struct in the type */
+    if (v == NULL) {
+        /* */
+    } else if (is_intobject(v)) {
+        long x = getintvalue(v);
+        if (x < 0)
+            x = -x;
+        return newintobject(x);
+    } else if (is_floatobject(v)) {
+        double x = getfloatvalue(v);
+        if (x < 0)
+            x = -x;
+        return newfloatobject(x);
+    }
+    err_setstr(TypeError, "abs() argument must be float or int");
+    return NULL;
 }
 
 static object *
@@ -431,34 +427,30 @@ builtin_range(self, v)
        return v;
 }
 
-static object *
-builtin_raw_input(self, v)
-       object *self;
-       object *v;
+static object *builtin_raw_input(object *self, object *v)
 {
-       FILE *in = sysgetfile("stdin", stdin);
-       FILE *out = sysgetfile("stdout", stdout);
-       char *p;
-       int err;
-       int n = 1000;
-       flushline();
-       if (v != NULL)
-               printobject(v, out, PRINT_RAW);
-       v = newsizedstringobject((char *)NULL, n);
-       if (v != NULL) {
-               if ((err = fgets_intr(getstringvalue(v), n+1, in)) != E_OK) {
-                       err_input(err);
-                       DECREF(v);
-                       return NULL;
-               }
-               else {
-                       n = strlen(getstringvalue(v));
-                       if (n > 0 && getstringvalue(v)[n-1] == '\n')
-                               n--;
-                       resizestring(&v, n);
-               }
-       }
-       return v;
+    FILE *in = sysgetfile("stdin", stdin);
+    FILE *out = sysgetfile("stdout", stdout);
+    char *p;
+    int err;
+    int n = 1000;
+    flushline();
+    if (v != NULL)
+        printobject(v, out, PRINT_RAW);
+    v = newsizedstringobject((char *)NULL, n);
+    if (v != NULL) {
+        if ((err = fgets_intr(getstringvalue(v), n+1, in)) != E_OK) {
+            err_input(err);
+            DECREF(v);
+            return NULL;
+        } else {
+            n = strlen(getstringvalue(v));
+            if (n > 0 && getstringvalue(v)[n-1] == '\n')
+                n--;
+            resizestring(&v, n);
+        }
+    }
+    return v;
 }
 
 static object *
@@ -469,40 +461,38 @@ builtin_reload(self, v)
        return reload_module(v);
 }
 
-static object *
-builtin_type(self, v)
-       object *self;
-       object *v;
+static object *builtin_type(object *self, object *v)
 {
-       if (v == NULL) {
-               err_setstr(TypeError, "type() requres an argument");
-               return NULL;
-       }
-       v = (object *)v->ob_type;
-       INCREF(v);
-       return v;
+    if (v == NULL) {
+        err_setstr(TypeError, "type() requres an argument");
+        return NULL;
+    }
+    v = (object *)v->ob_type;
+    INCREF(v);
+    return v;
 }
 
+/* buildin模块的内建方法 */
 static struct methodlist builtin_methods[] = {
-       {"abs", builtin_abs},
-       {"chr", builtin_chr},
-       {"dir", builtin_dir},
-       {"divmod", builtin_divmod},
-       {"eval", builtin_eval},
-       {"exec", builtin_exec},
-       {"float", builtin_float},
-       {"input", builtin_input},
-       {"int", builtin_int},
-       {"len", builtin_len},
-       {"max", builtin_max},
-       {"min", builtin_min},
-       {"open", builtin_open}, /* XXX move to OS module */
-       {"ord", builtin_ord},
-       {"range", builtin_range},
-       {"raw_input", builtin_raw_input},
-       {"reload", builtin_reload},
-       {"type", builtin_type},
-       {NULL, NULL},
+    {"abs", builtin_abs},
+    {"chr", builtin_chr},
+    {"dir", builtin_dir},
+    {"divmod", builtin_divmod},
+    {"eval", builtin_eval},
+    {"exec", builtin_exec},
+    {"float", builtin_float},
+    {"input", builtin_input},
+    {"int", builtin_int},
+    {"len", builtin_len},
+    {"max", builtin_max},
+    {"min", builtin_min},
+    {"open", builtin_open}, /* XXX move to OS module */
+    {"ord", builtin_ord},
+    {"range", builtin_range},
+    {"raw_input", builtin_raw_input},
+    {"reload", builtin_reload},
+    {"type", builtin_type},
+    {NULL, NULL},
 };
 
 static object *builtin_dict;
@@ -524,36 +514,32 @@ object *NameError;
 object *SystemError;
 object *KeyboardInterrupt;
 
-static object *
-newstdexception(name, message)
-       char *name, *message;
+static object *newstdexception(char *name, char *message)
 {
-       object *v = newstringobject(message);
-       if (v == NULL || dictinsert(builtin_dict, name, v) != 0)
-               fatal("no mem for new standard exception");
-       return v;
+    object *v = newstringobject(message);
+    if (v == NULL || dictinsert(builtin_dict, name, v) != 0)
+        fatal("no mem for new standard exception");
+    return v;
 }
 
-static void
-initerrors()
+static void initerrors()
 {
-       RuntimeError = newstdexception("RuntimeError", "run-time error");
-       EOFError = newstdexception("EOFError", "end-of-file read");
-       TypeError = newstdexception("TypeError", "type error");
-       MemoryError = newstdexception("MemoryError", "out of memory");
-       NameError = newstdexception("NameError", "undefined name");
-       SystemError = newstdexception("SystemError", "system error");
-       KeyboardInterrupt =
-               newstdexception("KeyboardInterrupt", "keyboard interrupt");
+    RuntimeError = newstdexception("RuntimeError", "run-time error");
+    EOFError = newstdexception("EOFError", "end-of-file read");
+    TypeError = newstdexception("TypeError", "type error");
+    MemoryError = newstdexception("MemoryError", "out of memory");
+    NameError = newstdexception("NameError", "undefined name");
+    SystemError = newstdexception("SystemError", "system error");
+    KeyboardInterrupt = newstdexception("KeyboardInterrupt", "keyboard interrupt");
 }
 
-void
-initbuiltin()
+void initbuiltin()
 {
-       object *m;
-       m = initmodule("builtin", builtin_methods);
-       builtin_dict = getmoduledict(m);
-       INCREF(builtin_dict);
-       initerrors();
-       (void) dictinsert(builtin_dict, "None", None);
+    object *m;
+    /* 创建一个叫做builtin的模块 */
+    m = initmodule("builtin", builtin_methods);
+    builtin_dict = getmoduledict(m);
+    INCREF(builtin_dict);
+    initerrors();
+    (void) dictinsert(builtin_dict, "None", None);
 }

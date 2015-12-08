@@ -28,38 +28,37 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 typedef struct {
        OB_HEAD
-       object *md_name;
-       object *md_dict;
+       object *md_name; /* 这里是一个string object */
+       object *md_dict; /* 这里是一个dictory object */
 } moduleobject;
 
-object *
-newmoduleobject(name)
-       char *name;
+object *newmoduleobject(char *name)
 {
-       moduleobject *m = NEWOBJ(moduleobject, &Moduletype);
-       if (m == NULL)
-               return NULL;
-       m->md_name = newstringobject(name);
-       m->md_dict = newdictobject();
-       if (m->md_name == NULL || m->md_dict == NULL) {
-               DECREF(m);
-               return NULL;
-       }
-       return (object *)m;
+    moduleobject *m = NEWOBJ(moduleobject, &Moduletype);
+    if (m == NULL)
+        return NULL;
+    m->md_name = newstringobject(name);
+    m->md_dict = newdictobject();
+    if (m->md_name == NULL || m->md_dict == NULL) {
+        DECREF(m);
+        return NULL;
+    }
+    return (object *)m;
 }
 
-object *
-getmoduledict(m)
-       object *m;
+/**
+ * 此函数获取模块的字典. 注意是模块的字典
+ */
+object *getmoduledict(object *m)
 {
-       if (!is_moduleobject(m)) {
-               err_badcall();
-               return NULL;
-       }
-       return ((moduleobject *)m) -> md_dict;
+    if (!is_moduleobject(m)) {
+        err_badcall();
+        return NULL;
+    }
+    return ((moduleobject *)m) -> md_dict;
 }
 
-char *
+    char *
 getmodulename(m)
        object *m;
 {
